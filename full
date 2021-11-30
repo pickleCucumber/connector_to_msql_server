@@ -1,0 +1,52 @@
+import pyodbc
+import sys
+import os
+import re
+import pandas as pd
+import numpy as np
+import datetime
+from datetime import datetime
+import time
+
+start = time.time()
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+conn = pyodbc.connect('Driver={SQL Server};'
+                      'Server=server;'
+                      'Database=db;'
+                      'Trusted_Connection=yes;')
+
+cur = conn.cursor()
+query_dts='SELECT top 1 Date FROM your_table ORDER BY Date DESC'
+cur.execute(query_dts)
+
+startdate=pd.Timestamp(cur.fetchall()[0][0])
+print(startdate)
+
+
+path="L:\\to_file"
+df=pd.read_excel(path)
+
+
+del df['BANK ICAAP']
+df=df.melt(id_vars=['ID'])
+df=df.rename(columns={"variable": "Date"})
+df=df.rename(columns={"ID": "ValueName"})
+df=df.rename(columns={"value": "ValueAmount"})
+df=df.dropna(axis=0, how='any')
+df['Date'] = [re.sub(r'^Unnamed: \d{1,4}','NaN', str(x)) for x in df['Date']]
+df = df.loc[df['Date'] != 'NaN']
+df['Date'] = pd.to_datetime(df['Date'])
+df=df[df['Date'] > startdate]
+
+tuples = [tuple(x) for x in df.to_numpy()]
+print(tuples)
+
+#cur.fast_executemany = True
+cur.executemany("INSERT INTO your_table ([ValueName],[Date],[ValueAmount]) values (?,?,?)", tuples)
+
+conn.commit()
+conn.close()
+end = time.time()
+#res= end-start
+print('Загрузка завершена!')
